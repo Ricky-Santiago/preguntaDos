@@ -12,6 +12,9 @@ import javax.persistence.EntityManager;
 import javax.persistence.EntityManagerFactory;
 import javax.persistence.Query;
 import javax.persistence.EntityNotFoundException;
+import javax.persistence.NoResultException;
+import javax.persistence.Persistence;
+import javax.persistence.TypedQuery;
 import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Root;
 
@@ -24,7 +27,10 @@ public class ClienteJpaController implements Serializable {
     public ClienteJpaController(EntityManagerFactory emf) {
         this.emf = emf;
     }
-    private EntityManagerFactory emf = null;
+    private EntityManagerFactory emf = Persistence.createEntityManagerFactory("com.mycompany_PreguntaDoss_war_1.0-SNAPSHOTPU");
+
+    public ClienteJpaController() {
+    }
 
     public EntityManager getEntityManager() {
         return emf.createEntityManager();
@@ -133,5 +139,56 @@ public class ClienteJpaController implements Serializable {
             em.close();
         }
     }
-    
+
+    public boolean validar(String logiClie, String passClie) {
+        EntityManager em = getEntityManager();
+        try {
+            TypedQuery<Cliente> query = em.createNamedQuery("Cliente.validar", Cliente.class);
+            query.setParameter("logiClie", logiClie);
+            query.setParameter("passClie", passClie);
+
+            query.getSingleResult(); // Si no lanza excepción, el cliente existe
+            return true;
+        } catch (NoResultException e) {
+            return false; // No se encontró el cliente
+        } finally {
+            em.close();
+        }
+    }
+
+    public boolean actualizarClave(String login, String nuevaClaveHash) {
+        EntityManager em = getEntityManager();
+        try {
+            // Buscar el cliente por login (logiClie)
+            TypedQuery<Cliente> query = em.createQuery(
+                    "SELECT c FROM Cliente c WHERE c.logiClie = :login", Cliente.class);
+            query.setParameter("login", login);
+            Cliente cliente = query.getSingleResult();
+
+            if (cliente == null) {
+                return false;
+            }
+
+            // Actualizar la clave
+            em.getTransaction().begin();
+            cliente.setPassClie(nuevaClaveHash);
+            em.merge(cliente);
+            em.getTransaction().commit();
+
+            return true;
+
+        } catch (NoResultException e) {
+            // No se encontró cliente con ese login
+            return false;
+        } catch (Exception e) {
+            e.printStackTrace();
+            if (em.getTransaction().isActive()) {
+                em.getTransaction().rollback();
+            }
+            return false;
+        } finally {
+            em.close();
+        }
+    }
+
 }
